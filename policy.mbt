@@ -34,11 +34,11 @@ pub(all) struct Policy {
 }
 
 ///|
-/// The default policy: every numeric limit is off, changes may run inside a
-/// freeze only if the plan says so, and an unnamed service is accepted.
+/// The default policy: every numeric limit is off and an unnamed service is
+/// accepted, but a change may not run inside a declared freeze.
 ///
-/// Only `forbid_freeze_conflicts` is on, because a change running inside a
-/// declared freeze is a contradiction rather than a tuning choice.
+/// `forbid_freeze_conflicts` is the only rule that is on, because a change
+/// running inside a freeze is a contradiction rather than a tuning choice.
 pub fn Policy::standard() -> Policy {
   {
     max_concurrent: 0,
@@ -53,8 +53,8 @@ pub fn Policy::standard() -> Policy {
 
 ///|
 /// A tight policy for a fragile service: two changes at a time, no change
-/// longer than two hours, thirty minutes of slack after every dependency, no
-/// two high risk changes in the same minute, two high risk changes a day, no
+/// longer than two hours, thirty minutes of slack after every dependency, high
+/// risk changes that never overlap, at most two high risk changes a day, no
 /// change inside a freeze and no change without a named service.
 pub fn Policy::strict() -> Policy {
   {
