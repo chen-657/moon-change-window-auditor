@@ -29,3 +29,12 @@ fn report_of(source : String) -> @moon-change-window-auditor.AuditReport {
 fn rendered(source : String) -> String {
   @moon-change-window-auditor.render_report(report_of(source))
 }
+
+///|
+/// Interval between two instants that are expected to be valid.
+fn slot_of(
+  start : String,
+  end : String,
+) -> @moon-change-window-auditor.Slot raise {
+  { start: instant_of(start), end: instant_of(end), }
+}
