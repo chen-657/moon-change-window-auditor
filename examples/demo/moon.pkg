@@ -1,0 +1,5 @@
+import {
+  "chen-657/moon-change-window-auditor" @audit,
+}
+
+pkgtype(kind: "executable")
