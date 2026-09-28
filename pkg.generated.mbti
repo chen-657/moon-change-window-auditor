@@ -4,11 +4,17 @@ package "chen-657/moon-change-window-auditor"
 // Values
 pub fn audit(Plan) -> AuditReport
 
+pub fn audit_with_policy(Plan, Policy) -> PolicyReport
+
 pub fn blocked_intervals(Plan) -> Array[Slot]
 
 pub fn blocked_minutes(Plan) -> Int
 
 pub fn busiest_intervals(Plan, Int) -> Array[Slot]
+
+pub fn can_schedule(Plan, Slot, Array[String], Int) -> ScheduleCheck
+
+pub fn candidate_slot(Int, Int) -> Slot
 
 pub fn change_minutes(Plan) -> Int
 
@@ -16,15 +22,25 @@ pub fn clip_slot(Slot, Int, Int) -> Slot?
 
 pub fn concurrency_at(Plan, Int) -> Int
 
+pub fn csv_escape(String) -> String
+
 pub fn dependencies_of(Plan, String) -> Array[String]
 
 pub fn dependency_depth(Plan, String) -> Int
 
 pub fn dependents_of(Plan, String) -> Array[String]
 
+pub fn diff_plans(Plan, Plan) -> PlanDiff
+
+pub fn earliest_schedule(Plan) -> Array[ScheduledChange]?
+
+pub fn earliest_start(Plan, Slot, Int, Int) -> Int?
+
 pub fn execution_order(Plan) -> Array[String]?
 
 pub fn find_cycles(Plan) -> Array[Array[String]]
+
+pub fn find_service(PlanSummary, String) -> ServiceSummary?
 
 pub fn format_duration(Int) -> String
 
@@ -44,11 +60,15 @@ pub fn intersect_slots(Array[Slot], Array[Slot]) -> Array[Slot]
 
 pub fn invert_slots(Array[Slot], Int, Int) -> Array[Slot]
 
+pub fn json_escape(String) -> String
+
 pub fn load_profile(Plan, Int, Int, Int) -> Array[LoadPoint]
 
 pub fn max_concurrency_in(Plan, Slot) -> Int
 
 pub fn merge_slots(Array[Slot]) -> Array[Slot]
+
+pub fn next_slots(Plan, Int, Int, Int, Int) -> Array[Slot]
 
 pub fn parse_instant(String) -> Int?
 
@@ -58,23 +78,65 @@ pub fn peak_concurrency(Plan) -> PeakConcurrency?
 
 pub fn render_cycle(Array[String]) -> String
 
+pub fn render_dependency_issues_csv(AuditReport) -> String
+
 pub fn render_diagnostics(Array[Diagnostic]) -> String
+
+pub fn render_diff(PlanDiff) -> String
 
 pub fn render_execution_order(Plan, Array[String]?) -> String
 
+pub fn render_freeze_conflicts_csv(AuditReport) -> String
+
+pub fn render_overlaps_csv(AuditReport) -> String
+
+pub fn render_plan_json(Plan) -> String
+
+pub fn render_policy_report(PolicyReport) -> String
+
 pub fn render_report(AuditReport) -> String
+
+pub fn render_report_json(AuditReport) -> String
+
+pub fn render_report_markdown(AuditReport) -> String
+
+pub fn render_schedule(Array[ScheduledChange]) -> String
+
+pub fn render_schedule_result(Array[ScheduledChange]?) -> String
 
 pub fn render_slots(Array[Slot]) -> String
 
+pub fn render_slots_csv(Array[Slot]) -> String
+
+pub fn render_slots_json(Array[Slot]) -> String
+
+pub fn render_slots_markdown(Array[Slot]) -> String
+
+pub fn render_summary(PlanSummary) -> String
+
+pub fn render_timeline(Plan, Int, Int, Int) -> String
+
+pub fn render_violations(Array[PolicyViolation]) -> String
+
+pub fn render_windows_csv(Plan) -> String
+
+pub fn render_windows_markdown(Plan) -> String
+
 pub fn safe_slots(Plan, Int, Int, Int) -> Array[Slot]
 
+pub fn schedule_check_line(ScheduleCheck) -> String
+
 pub fn service_concurrency_at(Plan, String, Int) -> Int
+
+pub fn slack_minutes(Plan, String) -> Int?
 
 pub fn slot_at(Array[Slot], Int) -> Slot?
 
 pub fn sort_slots(Array[Slot]) -> Array[Slot]
 
 pub fn subtract_slots(Array[Slot], Array[Slot]) -> Array[Slot]
+
+pub fn summarize(Plan) -> PlanSummary
 
 pub fn total_duration(Array[Slot]) -> Int
 
@@ -97,6 +159,15 @@ pub fn AuditReport::has_errors(Self) -> Bool
 pub fn AuditReport::status(Self) -> String
 pub fn AuditReport::warning_count(Self) -> Int
 pub fn AuditReport::window_count(Self) -> Int
+
+pub(all) enum ChangeKind {
+  Added
+  Removed
+  Modified
+} derive(Eq)
+pub fn ChangeKind::equal(Self, Self) -> Bool
+pub fn ChangeKind::label(Self) -> String
+pub fn ChangeKind::not_equal(Self, Self) -> Bool
 
 pub(all) struct DependencyIssue {
   window_id : String
@@ -172,6 +243,67 @@ pub fn Plan::has_errors(Self) -> Bool
 pub fn Plan::window_count(Self) -> Int
 pub fn Plan::windows_of_kind(Self, WindowKind) -> Array[Window]
 
+pub(all) struct PlanDiff {
+  changes : Array[WindowChange]
+  added_windows : Int
+  removed_windows : Int
+  modified_windows : Int
+  new_overlaps : Array[Overlap]
+  resolved_overlaps : Int
+  new_freeze_conflicts : Array[FreezeConflict]
+  resolved_freeze_conflicts : Int
+}
+pub fn PlanDiff::is_empty(Self) -> Bool
+
+pub(all) struct PlanSummary {
+  changes : Int
+  freezes : Int
+  blocked_minutes : Int
+  change_minutes : Int
+  low_risk : Int
+  medium_risk : Int
+  high_risk : Int
+  earliest : Int?
+  latest : Int?
+  span_minutes : Int
+  peak : PeakConcurrency?
+  services : Array[ServiceSummary]
+}
+
+pub(all) struct Policy {
+  max_concurrent : Int
+  max_change_minutes : Int
+  min_dependency_slack_minutes : Int
+  forbid_high_risk_overlap : Bool
+  max_high_risk_per_day : Int
+  forbid_freeze_conflicts : Bool
+  require_service : Bool
+}
+pub fn Policy::describe(Self) -> String
+pub fn Policy::relaxed() -> Self
+pub fn Policy::standard() -> Self
+pub fn Policy::strict() -> Self
+
+pub(all) struct PolicyReport {
+  plan : Plan
+  audit : AuditReport
+  policy : Policy
+  violations : Array[PolicyViolation]
+}
+pub fn PolicyReport::error_count(Self) -> Int
+pub fn PolicyReport::has_errors(Self) -> Bool
+pub fn PolicyReport::status(Self) -> String
+pub fn PolicyReport::violation_count(Self) -> Int
+pub fn PolicyReport::warning_count(Self) -> Int
+
+pub(all) struct PolicyViolation {
+  code : String
+  severity : Severity
+  subject : String
+  detail : String
+}
+pub fn PolicyViolation::to_line(Self) -> String
+
 pub(all) enum Risk {
   Low
   Medium
@@ -181,6 +313,33 @@ pub fn Risk::equal(Self, Self) -> Bool
 pub fn Risk::label(Self) -> String
 pub fn Risk::not_equal(Self, Self) -> Bool
 pub fn Risk::parse(String) -> Self?
+
+pub(all) struct ScheduleCheck {
+  candidate : Slot
+  allowed : Bool
+  reasons : Array[String]
+  change_conflicts : Array[SlotConflict]
+  freeze_ids : Array[String]
+}
+pub fn ScheduleCheck::to_line(Self) -> String
+
+pub(all) struct ScheduledChange {
+  id : String
+  start : Int
+  end : Int
+  original_start : Int
+  shift_minutes : Int
+}
+pub fn ScheduledChange::to_line(Self) -> String
+
+pub(all) struct ServiceSummary {
+  service : String
+  changes : Int
+  blocked_minutes : Int
+  peak_concurrency : Int
+  high_risk_changes : Int
+}
+pub fn ServiceSummary::to_line(Self) -> String
 
 pub(all) enum Severity {
   Error
@@ -203,6 +362,12 @@ pub fn Slot::overlaps(Self, Self) -> Bool
 pub fn Slot::to_line(Self) -> String
 pub fn Slot::touches(Self, Self) -> Bool
 
+pub(all) struct SlotConflict {
+  window_id : String
+  minutes : Int
+}
+pub fn SlotConflict::to_line(Self) -> String
+
 pub(all) struct Window {
   id : String
   service : String
@@ -217,6 +382,13 @@ pub fn Window::is_change(Self) -> Bool
 pub fn Window::is_freeze(Self) -> Bool
 pub fn Window::to_freeze_line(Self) -> String
 pub fn Window::to_line(Self) -> String
+
+pub(all) struct WindowChange {
+  id : String
+  kind : ChangeKind
+  detail : String
+}
+pub fn WindowChange::to_line(Self) -> String
 
 pub(all) enum WindowKind {
   Change
