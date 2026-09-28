@@ -25,10 +25,18 @@ jobs:
         run: moon build --target all
       - name: Test
         run: moon test --target all
-      - name: Run the demo example
-        run: moon run examples/demo --target wasm
+      - name: Run the examples
+        run: |
+          moon run examples/demo --target wasm
+          moon run examples/policy-gate --target wasm
       - name: Formatting and interface must be up to date
         run: |
           moon fmt
           moon info
           git diff --exit-code
+      - name: Submission material must stay out of the repository
+        run: |
+          if git ls-files | grep -E '申报书|PROJECT_PROPOSAL|参赛|报名'; then
+            echo "::error::submission material must not be committed to this public repository"
+            exit 1
+          fi
