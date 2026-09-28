@@ -19,6 +19,8 @@
 - **时间格式**：输入输出使用 ISO 8601 的日历日期与本地时刻写法 `YYYY-MM-DDTHH:MM`，不附带时区偏移，按单一未命名时区解释。
 - **日期算法**：`time.mbt` 中的 `days_from_civil` / `civil_from_days` 依据 Howard Hinnant 的公开文章 “chrono-Compatible Low-Level Date Algorithms” 描述的算法改写（该文章将该算法置于公有领域）。本项目只使用了把公历日期与 1970 起算的天数互转的部分，没有复制任何源码文件；闰年规则 `(year % 4 == 0 && year % 100 != 0) || year % 400 == 0` 是公历定义本身。
 - **变更窗口语义**：依赖必须在依赖方开始前结束、零缓冲记 warning、重叠按共享分钟数计量，均按运维变更管理的通行做法定义，并在 README 的“审计规则”中逐条写明。
+- **输出格式**：文本报告、JSON、Markdown 表格、CSV 与 ASCII 时间线都由本项目手写实现，只遵循各自的公开格式约定（JSON 转义规则、GitHub 风格 Markdown 表格、RFC 4180 风格 CSV 引号规则），没有引入任何序列化库或模板引擎。
+- **确定性**：为了让四个后端输出逐字节一致，排序一律使用自写的稳定插入排序（`sort_slots`、`sort_windows_by_start`、`sorted_strings`、`sorted_ints`、`sort_cycles`），代码点比较使用 `compare_strings`，全程不依赖库排序、哈希顺序或本地化规则。
 
 ## 第三方代码与数据
 
@@ -31,3 +33,4 @@
 - 工具链：`moonc v0.10.14+7d59c7ec9`、`moon 0.1.20260920`。
 - 目标：`native`、`wasm`、`wasm-gc`、`js` 均通过 `moon check --deny-warn`、`moon build`、`moon test`。
 - 时间轴使用 `Int` 分钟数，取值上限约 1.21 亿分钟，对应 2199-12-31T23:59，在 32 位 `Int` 后端上也不会溢出，因此四个后端行为一致。
+- 规模上限：审计按窗口两两比较，依赖图按窗口数线性遍历，均为离线、单机、数百条记录量级的设计；没有为百万级输入做索引，README 未声称支持该规模。
