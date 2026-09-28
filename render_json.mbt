@@ -1,14 +1,21 @@
 ///|
 /// Machine readable rendering of plans, audits and safe slots as JSON.
 ///
-/// The emitter is a tiny purpose built writer instead of a generic
+/// The emitter is a small purpose built writer instead of a generic
 /// serialisation library, because the package must stay dependency free and the
-/// output has to be byte for byte reproducible on every backend. Each value is
-/// pretty printed with two spaces per nesting level, one field per line and no
-/// trailing commas; an empty array is written inline as `[]`.
+/// output has to be byte for byte reproducible on every backend.
 ///
-/// Every document ends with exactly one newline, so a caller can append the
-/// text to a log or a file without adding one.
+/// Layout rules, applied everywhere:
+///
+/// - two spaces of indentation per nesting level,
+/// - one field or element per line, with a comma between siblings and none
+///   after the last one,
+/// - an empty array renders inline as `[]`,
+/// - every document ends with exactly one newline.
+///
+/// Every builder takes the indentation depth of the value it produces, so a
+/// nested object closes at the depth it opened at and a comma between siblings
+/// can never be forgotten.
 
 ///|
 /// Lower case hexadecimal digit of a value in `0-15`.
@@ -54,9 +61,6 @@ fn escape_char(character : Char) -> String {
 /// `0x20` becomes `\u00XX` with two lower case hexadecimal digits. Everything
 /// from `0x20` upwards passes through unchanged, so UTF-8 text such as `订单`
 /// stays readable and is not turned into `\u` escapes.
-///
-/// The backslash case runs before the others would matter, because a single
-/// pass over the input never looks at text it has already emitted.
 pub fn json_escape(text : String) -> String {
   let builder = StringBuilder()
   for character in text {
@@ -66,95 +70,83 @@ pub fn json_escape(text : String) -> String {
 }
 
 ///|
-/// Hand rolled JSON writer: owns the current indentation and the newline rules,
-/// so every value is laid out the same way.
-priv struct JsonWriter {
-  builder : StringBuilder
-  mut indent : Int
-}
-
-///|
-/// An empty writer at the top level.
-fn new_json_writer() -> JsonWriter {
-  { builder: StringBuilder(), indent: 0, }
-}
-
-///|
-/// Append the current indentation.
-fn write_indent(writer : JsonWriter) -> Unit {
-  for index = 0; index < writer.indent; index = index + 1 {
-    writer.builder.write_string("  ")
+/// The indentation of one nesting level, as a string.
+fn indent_text(depth : Int) -> String {
+  let builder = StringBuilder()
+  for index = 0; index < depth; index = index + 1 {
+    builder.write_string("  ")
   }
+  builder.to_string()
 }
 
 ///|
-/// Move one level in or out.
-fn write_nested(writer : JsonWriter, delta : Int) -> Unit {
-  writer.indent = writer.indent + delta
+/// A JSON string literal, with the body escaped.
+fn json_text(value : String) -> String {
+  "\"" + json_escape(value) + "\""
 }
 
 ///|
-/// Start a line and print a key. The colon ends the line so that the value can
-/// open on the following one.
-fn write_key(writer : JsonWriter, key : String) -> Unit {
-  writer.builder.write_char('\n')
-  write_indent(writer)
-  writer.builder.write_char('"')
-  writer.builder.write_string(json_escape(key))
-  writer.builder.write_string("\":")
+/// One `"key": value` line at the given depth.
+fn json_field(depth : Int, key : String, value : String) -> String {
+  indent_text(depth) + json_text(key) + ": " + value
 }
 
 ///|
-/// Print an atomic value on the current line.
-fn write_atom(writer : JsonWriter, text : String) -> Unit {
-  writer.builder.write_string(text)
+/// An object from already rendered field lines.
+///
+/// `depth` is the depth of the braces; the field lines carry their own
+/// indentation and are expected to sit one level deeper. An empty field list
+/// renders inline as `{}`.
+fn json_object(depth : Int, fields : Array[String]) -> String {
+  if fields.length() == 0 {
+    return "{}"
+  }
+  let builder = StringBuilder()
+  builder.write_string("{\n")
+  for index = 0; index < fields.length(); index = index + 1 {
+    builder.write_string(fields[index])
+    if index + 1 < fields.length() {
+      builder.write_char(',')
+    }
+    builder.write_char('\n')
+  }
+  builder.write_string(indent_text(depth))
+  builder.write_char('}')
+  builder.to_string()
 }
 
 ///|
-/// Print an already escaped string value on the current line.
-fn write_string_value(writer : JsonWriter, text : String) -> Unit {
-  writer.builder.write_char('"')
-  writer.builder.write_string(json_escape(text))
-  writer.builder.write_char('"')
-}
-
-///|
-/// Print an integer value on the current line.
-fn write_int_value(writer : JsonWriter, value : Int) -> Unit {
-  writer.builder.write_string(value.to_string())
-}
-
-///|
-/// A JSON array of strings, laid out over several lines.
-fn json_string_array(values : Array[String]) -> String {
-  if values.length() == 0 {
+/// An array from already rendered elements.
+///
+/// `depth` is the depth of the brackets; every element is placed on its own line
+/// one level deeper. An empty array renders inline as `[]`.
+fn json_array(depth : Int, elements : Array[String]) -> String {
+  if elements.length() == 0 {
     return "[]"
   }
-  let writer = new_json_writer()
-  writer.builder.write_string("[")
-  write_nested(writer, 1)
-  for index = 0; index < values.length(); index = index + 1 {
-    writer.builder.write_char('\n')
-    write_indent(writer)
-    write_string_value(writer, values[index])
-    if index + 1 < values.length() {
-      writer.builder.write_char(',')
+  let builder = StringBuilder()
+  builder.write_string("[\n")
+  for index = 0; index < elements.length(); index = index + 1 {
+    builder.write_string(indent_text(depth + 1))
+    builder.write_string(elements[index])
+    if index + 1 < elements.length() {
+      builder.write_char(',')
     }
+    builder.write_char('\n')
   }
-  write_nested(writer, -1)
-  writer.builder.write_char('\n')
-  write_indent(writer)
-  writer.builder.write_char(']')
-  writer.builder.to_string()
+  builder.write_string(indent_text(depth))
+  builder.write_char(']')
+  builder.to_string()
 }
 
 ///|
-/// Append the closing line of an object or array.
-fn write_closer(writer : JsonWriter, closer : Char) -> Unit {
-  write_nested(writer, -1)
-  writer.builder.write_char('\n')
-  write_indent(writer)
-  writer.builder.write_char(closer)
+/// An array of strings, one per line.
+fn json_text_array(depth : Int, values : Array[String]) -> String {
+  let elements : Array[String] = []
+  for value in values {
+    elements.push(json_text(value))
+  }
+  json_array(depth, elements)
 }
 
 ///|
@@ -165,116 +157,94 @@ fn write_closer(writer : JsonWriter, closer : Char) -> Unit {
 /// `minutes` is the raw length in minutes, `kind` and `risk` use their lower
 /// case `label()` and `depends` keeps the input order of the dependencies. A
 /// freeze carries no dependencies of its own, so its `depends` array is empty.
-fn json_window_object(window : Window) -> String {
-  let writer = new_json_writer()
-  writer.builder.write_string("{")
-  write_nested(writer, 1)
-  write_key(writer, "id")
-  write_string_value(writer, window.id)
-  write_key(writer, "service")
-  write_string_value(writer, window.service)
-  write_key(writer, "kind")
-  write_string_value(writer, window.kind.label())
-  write_key(writer, "start")
-  write_string_value(writer, format_instant(window.start))
-  write_key(writer, "end")
-  write_string_value(writer, format_instant(window.end))
-  write_key(writer, "minutes")
-  write_int_value(writer, window.duration())
-  write_key(writer, "risk")
-  write_string_value(writer, window.risk.label())
-  write_key(writer, "depends")
-  write_atom(writer, json_string_array(window.depends))
-  write_closer(writer, '}')
-  writer.builder.to_string()
+fn json_window_object(depth : Int, window : Window) -> String {
+  json_object(depth, [
+    json_field(depth + 1, "id", json_text(window.id)),
+    json_field(depth + 1, "service", json_text(window.service)),
+    json_field(depth + 1, "kind", json_text(window.kind.label())),
+    json_field(depth + 1, "start", json_text(format_instant(window.start))),
+    json_field(depth + 1, "end", json_text(format_instant(window.end))),
+    json_field(depth + 1, "minutes", window.duration().to_string()),
+    json_field(depth + 1, "risk", json_text(window.risk.label())),
+    json_field(depth + 1, "depends", json_text_array(depth + 1, window.depends)),
+  ])
 }
 
 ///|
 /// One diagnostic object.
-fn json_diagnostic_object(diagnostic : Diagnostic) -> String {
-  let writer = new_json_writer()
-  writer.builder.write_string("{")
-  write_nested(writer, 1)
-  write_key(writer, "severity")
-  write_string_value(writer, diagnostic.severity.label())
-  write_key(writer, "line")
-  write_int_value(writer, diagnostic.line)
-  write_key(writer, "code")
-  write_string_value(writer, diagnostic.code)
-  write_key(writer, "detail")
-  write_string_value(writer, diagnostic.detail)
-  write_closer(writer, '}')
-  writer.builder.to_string()
+fn json_diagnostic_object(depth : Int, diagnostic : Diagnostic) -> String {
+  json_object(depth, [
+    json_field(depth + 1, "severity", json_text(diagnostic.severity.label())),
+    json_field(depth + 1, "line", diagnostic.line.to_string()),
+    json_field(depth + 1, "code", json_text(diagnostic.code)),
+    json_field(depth + 1, "detail", json_text(diagnostic.detail)),
+  ])
 }
 
 ///|
 /// One overlap object.
-fn json_overlap_object(overlap : Overlap) -> String {
-  let writer = new_json_writer()
-  writer.builder.write_string("{")
-  write_nested(writer, 1)
-  write_key(writer, "first")
-  write_string_value(writer, overlap.first)
-  write_key(writer, "second")
-  write_string_value(writer, overlap.second)
-  write_key(writer, "minutes")
-  write_int_value(writer, overlap.minutes)
-  write_key(writer, "impact")
-  write_string_value(writer, overlap.impact.label())
-  write_closer(writer, '}')
-  writer.builder.to_string()
+fn json_overlap_object(depth : Int, overlap : Overlap) -> String {
+  json_object(depth, [
+    json_field(depth + 1, "first", json_text(overlap.first)),
+    json_field(depth + 1, "second", json_text(overlap.second)),
+    json_field(depth + 1, "minutes", overlap.minutes.to_string()),
+    json_field(depth + 1, "impact", json_text(overlap.impact.label())),
+  ])
 }
 
 ///|
 /// One freeze conflict object.
-fn json_conflict_object(conflict : FreezeConflict) -> String {
-  let writer = new_json_writer()
-  writer.builder.write_string("{")
-  write_nested(writer, 1)
-  write_key(writer, "window")
-  write_string_value(writer, conflict.window_id)
-  write_key(writer, "freeze")
-  write_string_value(writer, conflict.freeze_id)
-  write_key(writer, "minutes")
-  write_int_value(writer, conflict.minutes)
-  write_closer(writer, '}')
-  writer.builder.to_string()
+fn json_conflict_object(depth : Int, conflict : FreezeConflict) -> String {
+  json_object(depth, [
+    json_field(depth + 1, "window", json_text(conflict.window_id)),
+    json_field(depth + 1, "freeze", json_text(conflict.freeze_id)),
+    json_field(depth + 1, "minutes", conflict.minutes.to_string()),
+  ])
 }
 
 ///|
 /// One dependency issue object.
-fn json_issue_object(issue : DependencyIssue) -> String {
-  let writer = new_json_writer()
-  writer.builder.write_string("{")
-  write_nested(writer, 1)
-  write_key(writer, "window")
-  write_string_value(writer, issue.window_id)
-  write_key(writer, "dependency")
-  write_string_value(writer, issue.dependency)
-  write_key(writer, "problem")
-  write_string_value(writer, issue.problem.label())
-  write_key(writer, "severity")
-  write_string_value(writer, issue.severity.label())
-  write_key(writer, "detail")
-  write_string_value(writer, issue.detail)
-  write_closer(writer, '}')
-  writer.builder.to_string()
+fn json_issue_object(depth : Int, issue : DependencyIssue) -> String {
+  json_object(depth, [
+    json_field(depth + 1, "window", json_text(issue.window_id)),
+    json_field(depth + 1, "dependency", json_text(issue.dependency)),
+    json_field(depth + 1, "problem", json_text(issue.problem.label())),
+    json_field(depth + 1, "severity", json_text(issue.severity.label())),
+    json_field(depth + 1, "detail", json_text(issue.detail)),
+  ])
 }
 
 ///|
 /// One safe slot object.
-fn json_slot_object(slot : Slot) -> String {
-  let writer = new_json_writer()
-  writer.builder.write_string("{")
-  write_nested(writer, 1)
-  write_key(writer, "start")
-  write_string_value(writer, format_instant(slot.start))
-  write_key(writer, "end")
-  write_string_value(writer, format_instant(slot.end))
-  write_key(writer, "minutes")
-  write_int_value(writer, slot.duration())
-  write_closer(writer, '}')
-  writer.builder.to_string()
+fn json_slot_object(depth : Int, slot : Slot) -> String {
+  json_object(depth, [
+    json_field(depth + 1, "start", json_text(format_instant(slot.start))),
+    json_field(depth + 1, "end", json_text(format_instant(slot.end))),
+    json_field(depth + 1, "minutes", slot.duration().to_string()),
+  ])
+}
+
+///|
+/// An array of window objects at the given depth.
+fn json_window_array(depth : Int, windows : Array[Window]) -> String {
+  let elements : Array[String] = []
+  for window in windows {
+    elements.push(json_window_object(depth + 1, window))
+  }
+  json_array(depth, elements)
+}
+
+///|
+/// An array of diagnostic objects at the given depth.
+fn json_diagnostic_array(
+  depth : Int,
+  diagnostics : Array[Diagnostic],
+) -> String {
+  let elements : Array[String] = []
+  for diagnostic in diagnostics {
+    elements.push(json_diagnostic_object(depth + 1, diagnostic))
+  }
+  json_array(depth, elements)
 }
 
 ///|
@@ -285,45 +255,15 @@ fn json_slot_object(slot : Slot) -> String {
 /// keep their input order, because their line numbers are only meaningful in
 /// that order.
 pub fn render_plan_json(plan : Plan) -> String {
-  let writer = new_json_writer()
-  writer.builder.write_string("{")
-  write_nested(writer, 1)
-  write_key(writer, "windows")
-  let ordered = sort_windows_by_start(plan.windows)
-  if ordered.length() == 0 {
-    write_atom(writer, "[]")
-  } else {
-    write_atom(writer, "[")
-    write_nested(writer, 1)
-    for index = 0; index < ordered.length(); index = index + 1 {
-      writer.builder.write_char('\n')
-      write_indent(writer)
-      write_atom(writer, json_window_object(ordered[index]))
-      if index + 1 < ordered.length() {
-        writer.builder.write_char(',')
-      }
-    }
-    write_closer(writer, ']')
-  }
-  write_key(writer, "diagnostics")
-  if plan.diagnostics.length() == 0 {
-    write_atom(writer, "[]")
-  } else {
-    write_atom(writer, "[")
-    write_nested(writer, 1)
-    for index = 0; index < plan.diagnostics.length(); index = index + 1 {
-      writer.builder.write_char('\n')
-      write_indent(writer)
-      write_atom(writer, json_diagnostic_object(plan.diagnostics[index]))
-      if index + 1 < plan.diagnostics.length() {
-        writer.builder.write_char(',')
-      }
-    }
-    write_closer(writer, ']')
-  }
-  write_closer(writer, '}')
-  writer.builder.write_char('\n')
-  writer.builder.to_string()
+  json_object(0, [
+    json_field(
+      1,
+      "windows",
+      json_window_array(1, sort_windows_by_start(plan.windows)),
+    ),
+    json_field(1, "diagnostics", json_diagnostic_array(1, plan.diagnostics)),
+  ]) +
+  "\n"
 }
 
 ///|
@@ -331,121 +271,46 @@ pub fn render_plan_json(plan : Plan) -> String {
 ///
 /// The summary fields come first, then the collections. `changes` holds the
 /// planned changes and `freezes` the change freezes, each sorted by start; the
-/// remaining arrays keep the order the audit produced them in, so an overlap,
-/// a conflict or an issue stays attributable to the same pair of records.
+/// remaining arrays keep the order the audit produced them in, so an overlap, a
+/// conflict or an issue stays attributable to the same pair of records.
 pub fn render_report_json(report : AuditReport) -> String {
-  let writer = new_json_writer()
-  writer.builder.write_string("{")
-  write_nested(writer, 1)
-  write_key(writer, "status")
-  write_string_value(writer, report.status())
-  write_key(writer, "changes")
-  let changes = sort_windows_by_start(report.plan.changes())
-  if changes.length() == 0 {
-    write_atom(writer, "[]")
-  } else {
-    write_atom(writer, "[")
-    write_nested(writer, 1)
-    for index = 0; index < changes.length(); index = index + 1 {
-      writer.builder.write_char('\n')
-      write_indent(writer)
-      write_atom(writer, json_window_object(changes[index]))
-      if index + 1 < changes.length() {
-        writer.builder.write_char(',')
-      }
-    }
-    write_closer(writer, ']')
+  let overlap_elements : Array[String] = []
+  for overlap in report.overlaps {
+    overlap_elements.push(json_overlap_object(2, overlap))
   }
-  write_key(writer, "freezes")
-  let freezes = sort_windows_by_start(report.plan.freezes())
-  if freezes.length() == 0 {
-    write_atom(writer, "[]")
-  } else {
-    write_atom(writer, "[")
-    write_nested(writer, 1)
-    for index = 0; index < freezes.length(); index = index + 1 {
-      writer.builder.write_char('\n')
-      write_indent(writer)
-      write_atom(writer, json_window_object(freezes[index]))
-      if index + 1 < freezes.length() {
-        writer.builder.write_char(',')
-      }
-    }
-    write_closer(writer, ']')
+  let conflict_elements : Array[String] = []
+  for conflict in report.freeze_conflicts {
+    conflict_elements.push(json_conflict_object(2, conflict))
   }
-  write_key(writer, "errors")
-  write_int_value(writer, report.error_count())
-  write_key(writer, "warnings")
-  write_int_value(writer, report.warning_count())
-  write_key(writer, "overlaps")
-  if report.overlaps.length() == 0 {
-    write_atom(writer, "[]")
-  } else {
-    write_atom(writer, "[")
-    write_nested(writer, 1)
-    for index = 0; index < report.overlaps.length(); index = index + 1 {
-      writer.builder.write_char('\n')
-      write_indent(writer)
-      write_atom(writer, json_overlap_object(report.overlaps[index]))
-      if index + 1 < report.overlaps.length() {
-        writer.builder.write_char(',')
-      }
-    }
-    write_closer(writer, ']')
+  let issue_elements : Array[String] = []
+  for issue in report.dependency_issues {
+    issue_elements.push(json_issue_object(2, issue))
   }
-  write_key(writer, "freeze_conflicts")
-  if report.freeze_conflicts.length() == 0 {
-    write_atom(writer, "[]")
-  } else {
-    write_atom(writer, "[")
-    write_nested(writer, 1)
-    for index = 0; index < report.freeze_conflicts.length(); index = index + 1 {
-      writer.builder.write_char('\n')
-      write_indent(writer)
-      write_atom(writer, json_conflict_object(report.freeze_conflicts[index]))
-      if index + 1 < report.freeze_conflicts.length() {
-        writer.builder.write_char(',')
-      }
-    }
-    write_closer(writer, ']')
-  }
-  write_key(writer, "dependency_issues")
-  if report.dependency_issues.length() == 0 {
-    write_atom(writer, "[]")
-  } else {
-    write_atom(writer, "[")
-    write_nested(writer, 1)
-    for index = 0; index < report.dependency_issues.length(); index = index + 1 {
-      writer.builder.write_char('\n')
-      write_indent(writer)
-      write_atom(writer, json_issue_object(report.dependency_issues[index]))
-      if index + 1 < report.dependency_issues.length() {
-        writer.builder.write_char(',')
-      }
-    }
-    write_closer(writer, ']')
-  }
-  write_key(writer, "blocked_minutes")
-  write_int_value(writer, report.blocked_minutes)
-  write_key(writer, "diagnostics")
-  if report.plan.diagnostics.length() == 0 {
-    write_atom(writer, "[]")
-  } else {
-    write_atom(writer, "[")
-    write_nested(writer, 1)
-    for index = 0; index < report.plan.diagnostics.length(); index = index + 1 {
-      writer.builder.write_char('\n')
-      write_indent(writer)
-      write_atom(writer, json_diagnostic_object(report.plan.diagnostics[index]))
-      if index + 1 < report.plan.diagnostics.length() {
-        writer.builder.write_char(',')
-      }
-    }
-    write_closer(writer, ']')
-  }
-  write_closer(writer, '}')
-  writer.builder.write_char('\n')
-  writer.builder.to_string()
+  json_object(0, [
+    json_field(1, "status", json_text(report.status())),
+    json_field(
+      1,
+      "changes",
+      json_window_array(1, sort_windows_by_start(report.plan.changes())),
+    ),
+    json_field(
+      1,
+      "freezes",
+      json_window_array(1, sort_windows_by_start(report.plan.freezes())),
+    ),
+    json_field(1, "errors", report.error_count().to_string()),
+    json_field(1, "warnings", report.warning_count().to_string()),
+    json_field(1, "overlaps", json_array(1, overlap_elements)),
+    json_field(1, "freeze_conflicts", json_array(1, conflict_elements)),
+    json_field(1, "dependency_issues", json_array(1, issue_elements)),
+    json_field(1, "blocked_minutes", report.blocked_minutes.to_string()),
+    json_field(
+      1,
+      "diagnostics",
+      json_diagnostic_array(1, report.plan.diagnostics),
+    ),
+  ]) +
+  "\n"
 }
 
 ///|
@@ -454,24 +319,9 @@ pub fn render_report_json(report : AuditReport) -> String {
 /// The input order is preserved: `safe_slots` already returns the intervals in
 /// chronological order, and re-sorting here would hide a caller's own ordering.
 pub fn render_slots_json(slots : Array[Slot]) -> String {
-  if slots.length() == 0 {
-    return "[]\n"
+  let elements : Array[String] = []
+  for slot in slots {
+    elements.push(json_slot_object(1, slot))
   }
-  let writer = new_json_writer()
-  writer.builder.write_string("[")
-  write_nested(writer, 1)
-  for index = 0; index < slots.length(); index = index + 1 {
-    writer.builder.write_char('\n')
-    write_indent(writer)
-    write_atom(writer, json_slot_object(slots[index]))
-    if index + 1 < slots.length() {
-      writer.builder.write_char(',')
-    }
-  }
-  write_nested(writer, -1)
-  writer.builder.write_char('\n')
-  write_indent(writer)
-  writer.builder.write_char(']')
-  writer.builder.write_char('\n')
-  writer.builder.to_string()
+  json_array(0, elements) + "\n"
 }
