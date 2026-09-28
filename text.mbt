@@ -76,3 +76,66 @@ fn split_field(text : StringView) -> (String, String)? {
   }
   None
 }
+
+///|
+/// Compare two strings by code point: `-1`, `0` or `1`.
+///
+/// Ordering is defined here instead of relying on a trait so that every sorted
+/// report is reproducible on all four backends.
+fn compare_strings(left : String, right : String) -> Int {
+  let left_chars = left.iter().to_array()
+  let right_chars = right.iter().to_array()
+  let mut index = 0
+  while index < left_chars.length() && index < right_chars.length() {
+    let left_code = left_chars[index].to_int()
+    let right_code = right_chars[index].to_int()
+    if left_code < right_code {
+      return -1
+    }
+    if left_code > right_code {
+      return 1
+    }
+    index = index + 1
+  }
+  if left_chars.length() < right_chars.length() {
+    return -1
+  }
+  if left_chars.length() > right_chars.length() {
+    return 1
+  }
+  0
+}
+
+///|
+/// Copy strings ordered by code point, keeping input order for equals.
+fn sorted_strings(values : Array[String]) -> Array[String] {
+  let ordered : Array[String] = []
+  for value in values {
+    ordered.push(value)
+  }
+  let mut index = 1
+  while index < ordered.length() {
+    let current = ordered[index]
+    let mut position = index
+    while position > 0 && compare_strings(current, ordered[position - 1]) < 0 {
+      ordered[position] = ordered[position - 1]
+      position = position - 1
+    }
+    ordered[position] = current
+    index = index + 1
+  }
+  ordered
+}
+
+///|
+/// Sorted copy of an array without repeated values.
+fn distinct_strings(values : Array[String]) -> Array[String] {
+  let ordered = sorted_strings(values)
+  let unique : Array[String] = []
+  for value in ordered {
+    if unique.length() == 0 || unique[unique.length() - 1] != value {
+      unique.push(value)
+    }
+  }
+  unique
+}
