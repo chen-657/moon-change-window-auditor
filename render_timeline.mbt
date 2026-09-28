@@ -45,23 +45,22 @@ fn covers_minute(records : Array[Window], minute : Int) -> Bool {
 }
 
 ///|
-/// The cell of one column: `!` when a change and a freeze both cover it, `#`
-/// for a change, `=` for a freeze and `.` for free time.
-fn timeline_cell(
-  changes : Array[Window],
-  freezes : Array[Window],
-  minute : Int,
-) -> Char {
-  let in_change = covers_minute(changes, minute)
-  let in_freeze = covers_minute(freezes, minute)
-  if in_change && in_freeze {
-    '!'
-  } else if in_change {
-    '#'
-  } else if in_freeze {
+/// The cell of one row at one column.
+///
+/// A row only ever shows its own record: `.` when that record does not cover
+/// the minute, `!` when it does and a record of the other kind covers it as well
+/// (a change inside a freeze), `#` for a change and `=` for a freeze.
+fn timeline_cell(record : Window, others : Array[Window], minute : Int) -> Char {
+  if minute < record.start || minute >= record.end {
+    return '.'
+  }
+  if covers_minute(others, minute) {
+    return '!'
+  }
+  if record.is_freeze() {
     '='
   } else {
-    '.'
+    '#'
   }
 }
 
@@ -107,11 +106,12 @@ pub fn render_timeline(
   let freezes = plan.freezes()
   let width = widest_id(plan)
   for window in sort_windows_by_start(plan.windows) {
+    let others = if window.is_freeze() { changes } else { freezes }
     builder.write_string(pad_right(window.id, width))
     builder.write_string(" |")
     for column = 0; column < columns; column = column + 1 {
       builder.write_char(
-        timeline_cell(changes, freezes, from + column * cell_minutes),
+        timeline_cell(window, others, from + column * cell_minutes),
       )
     }
     builder.write_string("|\n")
