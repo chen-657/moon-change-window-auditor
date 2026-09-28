@@ -8,21 +8,77 @@ pub fn blocked_intervals(Plan) -> Array[Slot]
 
 pub fn blocked_minutes(Plan) -> Int
 
+pub fn busiest_intervals(Plan, Int) -> Array[Slot]
+
+pub fn change_minutes(Plan) -> Int
+
+pub fn clip_slot(Slot, Int, Int) -> Slot?
+
+pub fn concurrency_at(Plan, Int) -> Int
+
+pub fn dependencies_of(Plan, String) -> Array[String]
+
+pub fn dependency_depth(Plan, String) -> Int
+
+pub fn dependents_of(Plan, String) -> Array[String]
+
+pub fn execution_order(Plan) -> Array[String]?
+
+pub fn find_cycles(Plan) -> Array[Array[String]]
+
 pub fn format_duration(Int) -> String
 
 pub fn format_instant(Int) -> String
+
+pub fn freeze_conflicts(Plan) -> Array[FreezeConflict]
+
+pub fn freeze_minutes(Plan) -> Int
+
+pub fn freezes_hit_by(Plan, Slot) -> Array[Window]
+
+pub fn graph_leaves(Plan) -> Array[String]
+
+pub fn graph_roots(Plan) -> Array[String]
+
+pub fn intersect_slots(Array[Slot], Array[Slot]) -> Array[Slot]
+
+pub fn invert_slots(Array[Slot], Int, Int) -> Array[Slot]
+
+pub fn load_profile(Plan, Int, Int, Int) -> Array[LoadPoint]
+
+pub fn max_concurrency_in(Plan, Slot) -> Int
+
+pub fn merge_slots(Array[Slot]) -> Array[Slot]
 
 pub fn parse_instant(String) -> Int?
 
 pub fn parse_plan(String) -> Plan
 
+pub fn peak_concurrency(Plan) -> PeakConcurrency?
+
+pub fn render_cycle(Array[String]) -> String
+
 pub fn render_diagnostics(Array[Diagnostic]) -> String
+
+pub fn render_execution_order(Plan, Array[String]?) -> String
 
 pub fn render_report(AuditReport) -> String
 
 pub fn render_slots(Array[Slot]) -> String
 
 pub fn safe_slots(Plan, Int, Int, Int) -> Array[Slot]
+
+pub fn service_concurrency_at(Plan, String, Int) -> Int
+
+pub fn slot_at(Array[Slot], Int) -> Slot?
+
+pub fn sort_slots(Array[Slot]) -> Array[Slot]
+
+pub fn subtract_slots(Array[Slot], Array[Slot]) -> Array[Slot]
+
+pub fn total_duration(Array[Slot]) -> Int
+
+pub fn transitive_dependencies(Plan, String) -> Array[String]
 
 // Errors
 
@@ -31,9 +87,12 @@ pub(all) struct AuditReport {
   plan : Plan
   overlaps : Array[Overlap]
   dependency_issues : Array[DependencyIssue]
+  freeze_conflicts : Array[FreezeConflict]
   blocked_minutes : Int
 }
+pub fn AuditReport::change_count(Self) -> Int
 pub fn AuditReport::error_count(Self) -> Int
+pub fn AuditReport::freeze_count(Self) -> Int
 pub fn AuditReport::has_errors(Self) -> Bool
 pub fn AuditReport::status(Self) -> String
 pub fn AuditReport::warning_count(Self) -> Int
@@ -66,6 +125,13 @@ pub(all) struct Diagnostic {
 }
 pub fn Diagnostic::to_line(Self) -> String
 
+pub(all) struct FreezeConflict {
+  window_id : String
+  freeze_id : String
+  minutes : Int
+}
+pub fn FreezeConflict::to_line(Self) -> String
+
 pub(all) enum Impact {
   Critical
   Major
@@ -75,6 +141,12 @@ pub fn Impact::equal(Self, Self) -> Bool
 pub fn Impact::label(Self) -> String
 pub fn Impact::not_equal(Self, Self) -> Bool
 
+pub(all) struct LoadPoint {
+  start : Int
+  count : Int
+}
+pub fn LoadPoint::to_line(Self) -> String
+
 pub(all) struct Overlap {
   first : String
   second : String
@@ -83,13 +155,22 @@ pub(all) struct Overlap {
 }
 pub fn Overlap::to_line(Self) -> String
 
+pub(all) struct PeakConcurrency {
+  minute : Int
+  count : Int
+}
+pub fn PeakConcurrency::to_line(Self) -> String
+
 pub(all) struct Plan {
   windows : Array[Window]
   diagnostics : Array[Diagnostic]
 }
+pub fn Plan::changes(Self) -> Array[Window]
 pub fn Plan::find(Self, String) -> Window?
+pub fn Plan::freezes(Self) -> Array[Window]
 pub fn Plan::has_errors(Self) -> Bool
 pub fn Plan::window_count(Self) -> Int
+pub fn Plan::windows_of_kind(Self, WindowKind) -> Array[Window]
 
 pub(all) enum Risk {
   Low
@@ -113,8 +194,14 @@ pub(all) struct Slot {
   start : Int
   end : Int
 }
+pub fn Slot::contains(Self, Int) -> Bool
+pub fn Slot::contains_slot(Self, Self) -> Bool
 pub fn Slot::duration(Self) -> Int
+pub fn Slot::intersect(Self, Self) -> Self?
+pub fn Slot::merge_with(Self, Self) -> Self?
+pub fn Slot::overlaps(Self, Self) -> Bool
 pub fn Slot::to_line(Self) -> String
+pub fn Slot::touches(Self, Self) -> Bool
 
 pub(all) struct Window {
   id : String
@@ -123,9 +210,22 @@ pub(all) struct Window {
   end : Int
   risk : Risk
   depends : Array[String]
+  kind : WindowKind
 }
 pub fn Window::duration(Self) -> Int
+pub fn Window::is_change(Self) -> Bool
+pub fn Window::is_freeze(Self) -> Bool
+pub fn Window::to_freeze_line(Self) -> String
 pub fn Window::to_line(Self) -> String
+
+pub(all) enum WindowKind {
+  Change
+  Freeze
+} derive(Eq)
+pub fn WindowKind::equal(Self, Self) -> Bool
+pub fn WindowKind::label(Self) -> String
+pub fn WindowKind::not_equal(Self, Self) -> Bool
+pub fn WindowKind::parse(String) -> Self?
 
 // Type aliases
 
