@@ -1,0 +1,132 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "chen-657/moon-change-window-auditor"
+
+// Values
+pub fn audit(Plan) -> AuditReport
+
+pub fn blocked_intervals(Plan) -> Array[Slot]
+
+pub fn blocked_minutes(Plan) -> Int
+
+pub fn format_duration(Int) -> String
+
+pub fn format_instant(Int) -> String
+
+pub fn parse_instant(String) -> Int?
+
+pub fn parse_plan(String) -> Plan
+
+pub fn render_diagnostics(Array[Diagnostic]) -> String
+
+pub fn render_report(AuditReport) -> String
+
+pub fn render_slots(Array[Slot]) -> String
+
+pub fn safe_slots(Plan, Int, Int, Int) -> Array[Slot]
+
+// Errors
+
+// Types and methods
+pub(all) struct AuditReport {
+  plan : Plan
+  overlaps : Array[Overlap]
+  dependency_issues : Array[DependencyIssue]
+  blocked_minutes : Int
+}
+pub fn AuditReport::error_count(Self) -> Int
+pub fn AuditReport::has_errors(Self) -> Bool
+pub fn AuditReport::status(Self) -> String
+pub fn AuditReport::warning_count(Self) -> Int
+pub fn AuditReport::window_count(Self) -> Int
+
+pub(all) struct DependencyIssue {
+  window_id : String
+  dependency : String
+  problem : DependencyProblem
+  severity : Severity
+  detail : String
+}
+pub fn DependencyIssue::to_line(Self) -> String
+
+pub(all) enum DependencyProblem {
+  MissingDependency
+  SelfDependency
+  OutOfOrder
+  BackToBack
+} derive(Eq)
+pub fn DependencyProblem::equal(Self, Self) -> Bool
+pub fn DependencyProblem::label(Self) -> String
+pub fn DependencyProblem::not_equal(Self, Self) -> Bool
+
+pub(all) struct Diagnostic {
+  severity : Severity
+  code : String
+  line : Int
+  detail : String
+}
+pub fn Diagnostic::to_line(Self) -> String
+
+pub(all) enum Impact {
+  Critical
+  Major
+  Minor
+} derive(Eq)
+pub fn Impact::equal(Self, Self) -> Bool
+pub fn Impact::label(Self) -> String
+pub fn Impact::not_equal(Self, Self) -> Bool
+
+pub(all) struct Overlap {
+  first : String
+  second : String
+  minutes : Int
+  impact : Impact
+}
+pub fn Overlap::to_line(Self) -> String
+
+pub(all) struct Plan {
+  windows : Array[Window]
+  diagnostics : Array[Diagnostic]
+}
+pub fn Plan::find(Self, String) -> Window?
+pub fn Plan::has_errors(Self) -> Bool
+pub fn Plan::window_count(Self) -> Int
+
+pub(all) enum Risk {
+  Low
+  Medium
+  High
+} derive(Eq)
+pub fn Risk::equal(Self, Self) -> Bool
+pub fn Risk::label(Self) -> String
+pub fn Risk::not_equal(Self, Self) -> Bool
+pub fn Risk::parse(String) -> Self?
+
+pub(all) enum Severity {
+  Error
+  Warning
+} derive(Eq)
+pub fn Severity::equal(Self, Self) -> Bool
+pub fn Severity::label(Self) -> String
+pub fn Severity::not_equal(Self, Self) -> Bool
+
+pub(all) struct Slot {
+  start : Int
+  end : Int
+}
+pub fn Slot::duration(Self) -> Int
+pub fn Slot::to_line(Self) -> String
+
+pub(all) struct Window {
+  id : String
+  service : String
+  start : Int
+  end : Int
+  risk : Risk
+  depends : Array[String]
+}
+pub fn Window::duration(Self) -> Int
+pub fn Window::to_line(Self) -> String
+
+// Type aliases
+
+// Traits
