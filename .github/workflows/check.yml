@@ -1,0 +1,34 @@
+name: MoonBit checks
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Toolchain version
+        run: moon version --all
+      - name: Check
+        run: moon check --deny-warn --target all
+      - name: Build
+        run: moon build --target all
+      - name: Test
+        run: moon test --target all
+      - name: Run the demo example
+        run: moon run examples/demo --target wasm
+      - name: Formatting and interface must be up to date
+        run: |
+          moon fmt
+          moon info
+          git diff --exit-code
