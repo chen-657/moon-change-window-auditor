@@ -24,19 +24,20 @@ pub(all) struct ServiceSummary {
 
 ///|
 /// Render as
-/// `orders-db: 2 changes, 1h30m blocked, peak 2, 1 high risk`.
+/// `orders-db: 2 changes, 1h30m blocked, peak 2, 1 high risk change`.
+///
+/// A service with a single change reads `1 change`, not `1 changes`.
 pub fn ServiceSummary::to_line(self : ServiceSummary) -> String {
   let name = if self.service == "" { "(none)" } else { self.service }
   name +
   ": " +
-  self.changes.to_string() +
-  " changes, " +
+  count_text(self.changes, "change", "changes") +
+  ", " +
   format_duration(self.blocked_minutes) +
   " blocked, peak " +
   self.peak_concurrency.to_string() +
   ", " +
-  self.high_risk_changes.to_string() +
-  " high risk"
+  count_text(self.high_risk_changes, "high risk change", "high risk changes")
 }
 
 ///|

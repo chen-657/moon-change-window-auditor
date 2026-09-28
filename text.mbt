@@ -139,3 +139,11 @@ fn distinct_strings(values : Array[String]) -> Array[String] {
   }
   unique
 }
+
+///|
+/// `<n> <singular>` for one, `<n> <plural>` otherwise, so generated sentences
+/// never read `1 changes`.
+fn count_text(value : Int, singular : String, plural : String) -> String {
+  let noun = if value == 1 { singular } else { plural }
+  value.to_string() + " " + noun
+}

@@ -331,8 +331,8 @@ pub fn render_schedule(schedule : Array[ScheduledChange]) -> String {
   let builder = StringBuilder()
   builder.write_string(
     "Earliest dependency aware schedule (" +
-    schedule.length().to_string() +
-    " changes)\n",
+    count_text(schedule.length(), "change", "changes") +
+    ")\n",
   )
   if schedule.length() == 0 {
     builder.write_string("  (no changes)\n")
