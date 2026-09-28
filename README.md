@@ -20,21 +20,29 @@ MoonBit 原生的变更窗口审计与排期库：解析多服务维护变更记
 
 ## 安装
 
-当前从源码使用（尚未发布到 Mooncakes）：
+已发布到 Mooncakes：`chen-657/moon-change-window-auditor`（当前版本 `0.2.0`，MIT）。需要 MoonBit 工具链，`moonc` 不低于 `0.10.14`：
 
 ```bash
-git clone https://github.com/chen-657/moon-change-window-auditor
-cd moon-change-window-auditor
-moon check --deny-warn --target all
+moon add chen-657/moon-change-window-auditor
 ```
 
-在自己的 MoonBit 模块中作为依赖引用时，按包名导入并取一个别名：
+包页面：<https://mooncakes.io/docs/chen-657/moon-change-window-auditor>
+
+在自己的包中导入并取一个别名：
 
 ```moonbit
 // moon.pkg
 import {
   "chen-657/moon-change-window-auditor" @audit,
 }
+```
+
+从源码开发或复现本文档中的检查：
+
+```bash
+git clone https://github.com/chen-657/moon-change-window-auditor
+cd moon-change-window-auditor
+moon check --deny-warn --target all
 ```
 
 ## 输入格式
