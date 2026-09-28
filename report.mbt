@@ -49,11 +49,15 @@ fn write_section(
 pub fn render_report(report : AuditReport) -> String {
   let builder = StringBuilder()
   builder.write_string("Moon Change Window Audit\n")
-  builder.write_string("windows: " + report.window_count().to_string() + "\n")
+  builder.write_string("windows: " + report.change_count().to_string() + "\n")
+  builder.write_string("freezes: " + report.freeze_count().to_string() + "\n")
   builder.write_string("errors: " + report.error_count().to_string() + "\n")
   builder.write_string("warnings: " + report.warning_count().to_string() + "\n")
   builder.write_string(
     "overlaps: " + report.overlaps.length().to_string() + "\n",
+  )
+  builder.write_string(
+    "freeze conflicts: " + report.freeze_conflicts.length().to_string() + "\n",
   )
   builder.write_string(
     "dependency issues: " + report.dependency_issues.length().to_string() + "\n",
@@ -63,15 +67,25 @@ pub fn render_report(report : AuditReport) -> String {
   )
   builder.write_string("status: " + report.status() + "\n")
   let window_lines : Array[String] = []
-  for window in sort_windows_by_start(report.plan.windows) {
+  for window in sort_windows_by_start(report.plan.changes()) {
     window_lines.push(window.to_line())
   }
   write_section(builder, "WINDOWS", window_lines)
+  let freeze_lines : Array[String] = []
+  for freeze in sort_windows_by_start(report.plan.freezes()) {
+    freeze_lines.push(freeze.to_freeze_line())
+  }
+  write_section(builder, "FREEZES", freeze_lines)
   let overlap_lines : Array[String] = []
   for overlap in report.overlaps {
     overlap_lines.push(overlap.to_line())
   }
   write_section(builder, "OVERLAPS", overlap_lines)
+  let conflict_lines : Array[String] = []
+  for conflict in report.freeze_conflicts {
+    conflict_lines.push(conflict.to_line())
+  }
+  write_section(builder, "FREEZE CONFLICTS", conflict_lines)
   let issue_lines : Array[String] = []
   for issue in report.dependency_issues {
     issue_lines.push(issue.to_line())

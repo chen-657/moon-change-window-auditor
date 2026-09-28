@@ -41,6 +41,7 @@ pub fn parse_plan(source : String) -> Plan {
     let mut end_text = ""
     let mut risk_text = ""
     let mut depends_text = ""
+    let mut kind_text = ""
     let mut has_id = false
     let mut has_start = false
     let mut has_end = false
@@ -86,6 +87,8 @@ pub fn parse_plan(source : String) -> Plan {
         has_end = true
       } else if key == "risk" {
         risk_text = value
+      } else if key == "kind" {
+        kind_text = value
       } else {
         depends_text = value
       }
@@ -173,6 +176,29 @@ pub fn parse_plan(source : String) -> Plan {
         depends.push(dependency)
       }
     }
+    let mut kind = WindowKind::Change
+    if kind_text != "" {
+      match WindowKind::parse(kind_text) {
+        Some(value) => kind = value
+        None => {
+          diagnostics.push(error_at(line_number, "invalid-kind", kind_text))
+          record_ok = false
+        }
+      }
+    }
+    if kind == WindowKind::Freeze {
+      if risk_text != "" {
+        diagnostics.push(
+          warning_at(line_number, "ignored-field-on-freeze", "risk"),
+        )
+      }
+      if depends.length() > 0 {
+        diagnostics.push(
+          error_at(line_number, "freeze-with-dependency", join(depends, ",")),
+        )
+        record_ok = false
+      }
+    }
     if !record_ok {
       continue
     }
@@ -191,6 +217,7 @@ pub fn parse_plan(source : String) -> Plan {
       end: end_minutes,
       risk,
       depends,
+      kind,
     })
   }
   { windows, diagnostics, }
@@ -204,6 +231,7 @@ fn is_known_key(key : String) -> Bool {
   key == "start" ||
   key == "end" ||
   key == "risk" ||
+  key == "kind" ||
   key == "depends"
 }
 

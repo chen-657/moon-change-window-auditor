@@ -86,8 +86,45 @@ pub fn Risk::label(self : Risk) -> String {
 }
 
 ///|
+/// Kind of record: a planned change, or a period during which no change may run
+/// at all.
+pub(all) enum WindowKind {
+  Change
+  Freeze
+} derive(Eq)
+
+///|
+pub extend WindowKind with Eq::{equal}
+
+///|
+pub extend WindowKind with Eq::{not_equal}
+
+///|
+/// Parse `change` or `freeze`. `window` is accepted as a synonym of `change`.
+pub fn WindowKind::parse(text : String) -> WindowKind? {
+  match text {
+    "change" => Some(WindowKind::Change)
+    "window" => Some(WindowKind::Change)
+    "freeze" => Some(WindowKind::Freeze)
+    _ => None
+  }
+}
+
+///|
+/// Lower case label: `change` or `freeze`.
+pub fn WindowKind::label(self : WindowKind) -> String {
+  match self {
+    WindowKind::Change => "change"
+    WindowKind::Freeze => "freeze"
+  }
+}
+
+///|
 /// One maintenance or change window: a half open `[start, end)` interval with
 /// the identifiers of the windows it depends on.
+///
+/// A freeze uses the same shape but forbids changes instead of describing one,
+/// so it carries no risk level and no dependencies.
 pub(all) struct Window {
   id : String
   service : String
@@ -95,6 +132,19 @@ pub(all) struct Window {
   end : Int
   risk : Risk
   depends : Array[String]
+  kind : WindowKind
+}
+
+///|
+/// True when the record is a change freeze.
+pub fn Window::is_freeze(self : Window) -> Bool {
+  self.kind == WindowKind::Freeze
+}
+
+///|
+/// True when the record is a planned change.
+pub fn Window::is_change(self : Window) -> Bool {
+  self.kind == WindowKind::Change
 }
 
 ///|
@@ -133,11 +183,50 @@ pub fn Window::to_line(self : Window) -> String {
 }
 
 ///|
+/// Render a freeze as `freeze | company | 2026-12-24T00:00 -> 2026-12-27T00:00 | 3d`.
+pub fn Window::to_freeze_line(self : Window) -> String {
+  let service = if self.service == "" { "-" } else { self.service }
+  self.id +
+  " | " +
+  service +
+  " | " +
+  format_instant(self.start) +
+  " -> " +
+  format_instant(self.end) +
+  " | " +
+  format_duration(self.duration())
+}
+
+///|
 /// A parsed set of change windows together with everything reported while
 /// parsing.
 pub(all) struct Plan {
   windows : Array[Window]
   diagnostics : Array[Diagnostic]
+}
+
+///|
+/// Records of one kind, in input order.
+pub fn Plan::windows_of_kind(self : Plan, kind : WindowKind) -> Array[Window] {
+  let selected : Array[Window] = []
+  for window in self.windows {
+    if window.kind == kind {
+      selected.push(window)
+    }
+  }
+  selected
+}
+
+///|
+/// Planned changes, in input order.
+pub fn Plan::changes(self : Plan) -> Array[Window] {
+  self.windows_of_kind(WindowKind::Change)
+}
+
+///|
+/// Change freezes, in input order.
+pub fn Plan::freezes(self : Plan) -> Array[Window] {
+  self.windows_of_kind(WindowKind::Freeze)
 }
 
 ///|
@@ -256,6 +345,24 @@ pub fn Overlap::to_line(self : Overlap) -> String {
 }
 
 ///|
+/// A planned change that runs inside a change freeze.
+pub(all) struct FreezeConflict {
+  window_id : String
+  freeze_id : String
+  minutes : Int
+}
+
+///|
+/// Render as `api runs inside freeze blackout: 45m`.
+pub fn FreezeConflict::to_line(self : FreezeConflict) -> String {
+  self.window_id +
+  " runs inside " +
+  self.freeze_id +
+  ": " +
+  format_duration(self.minutes)
+}
+
+///|
 /// Kind of dependency problem reported by `audit`.
 pub(all) enum DependencyProblem {
   MissingDependency
@@ -314,17 +421,31 @@ pub(all) struct AuditReport {
   plan : Plan
   overlaps : Array[Overlap]
   dependency_issues : Array[DependencyIssue]
+  freeze_conflicts : Array[FreezeConflict]
   blocked_minutes : Int
 }
 
 ///|
-/// Number of windows in the audited plan.
+/// Number of records that were audited.
 pub fn AuditReport::window_count(self : AuditReport) -> Int {
   self.plan.window_count()
 }
 
 ///|
-/// Number of errors: parse errors, overlaps and error level dependency issues.
+/// Number of audited records that are planned changes.
+pub fn AuditReport::change_count(self : AuditReport) -> Int {
+  self.plan.changes().length()
+}
+
+///|
+/// Number of audited records that are change freezes.
+pub fn AuditReport::freeze_count(self : AuditReport) -> Int {
+  self.plan.freezes().length()
+}
+
+///|
+/// Number of errors: parse errors, overlaps, freeze conflicts and error level
+/// dependency issues.
 pub fn AuditReport::error_count(self : AuditReport) -> Int {
   let mut total = 0
   for diagnostic in self.plan.diagnostics {
@@ -337,7 +458,7 @@ pub fn AuditReport::error_count(self : AuditReport) -> Int {
       total = total + 1
     }
   }
-  total + self.overlaps.length()
+  total + self.overlaps.length() + self.freeze_conflicts.length()
 }
 
 ///|

@@ -74,7 +74,7 @@ fn sort_windows_by_start(windows : Array[Window]) -> Array[Window] {
 /// cannot overlap or be depended on; their problems stay in
 /// `plan.diagnostics`, and the report still fails.
 pub fn audit(plan : Plan) -> AuditReport {
-  let ordered = sort_windows_by_start(plan.windows)
+  let ordered = sort_windows_by_start(plan.changes())
   let overlaps : Array[Overlap] = []
   let mut first_index = 0
   while first_index < ordered.length() {
@@ -104,7 +104,7 @@ pub fn audit(plan : Plan) -> AuditReport {
     first_index = first_index + 1
   }
   let issues : Array[DependencyIssue] = []
-  for window in plan.windows {
+  for window in plan.changes() {
     for dependency in window.depends {
       if dependency == window.id {
         issues.push({
@@ -152,6 +152,47 @@ pub fn audit(plan : Plan) -> AuditReport {
     plan,
     overlaps,
     dependency_issues: issues,
+    freeze_conflicts: freeze_conflicts(plan),
     blocked_minutes: blocked_minutes(plan),
   }
+}
+
+///|
+/// Every pair of a planned change and a change freeze that share at least one
+/// minute.
+///
+/// A freeze forbids changes, so each pair is a conflict. Pairs are produced in
+/// freeze order, then in change order, which keeps the report reproducible.
+pub fn freeze_conflicts(plan : Plan) -> Array[FreezeConflict] {
+  let conflicts : Array[FreezeConflict] = []
+  for freeze in plan.freezes() {
+    for change in plan.changes() {
+      let minutes = overlap_minutes(
+        freeze.start,
+        freeze.end,
+        change.start,
+        change.end,
+      )
+      if minutes > 0 {
+        conflicts.push({ window_id: change.id, freeze_id: freeze.id, minutes, })
+      }
+    }
+  }
+  conflicts
+}
+
+///|
+/// Freezes a candidate interval would run into, ordered by freeze start.
+///
+/// This is the freeze half of `can_schedule`; it is exported separately so that
+/// callers can explain a refusal without running a full audit.
+pub fn freezes_hit_by(plan : Plan, candidate : Slot) -> Array[Window] {
+  let hits : Array[Window] = []
+  for freeze in plan.freezes() {
+    if overlap_minutes(freeze.start, freeze.end, candidate.start, candidate.end) >
+      0 {
+      hits.push(freeze)
+    }
+  }
+  hits
 }
